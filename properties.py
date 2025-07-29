@@ -88,10 +88,12 @@ class TextureProperty(PropertyGroup):
         update=simplified_tex_update,
     )
 
-    def get_tex_size(self) -> list[int]:
-        if self.tex:
-            return self.tex.size
-        return [0, 0]
+    @property
+    def size(self) -> tuple[int, int]:
+        if self.has_tex:
+            if self.tex is not None:
+                return tuple(self.tex.size)
+        return tuple(self.tex_reference_size)
 
     def draw_default_ui(self, layout: bpy.types.UILayout, index: int):
         def small_split(layout, prop: str, name: str):

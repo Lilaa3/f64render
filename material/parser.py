@@ -425,27 +425,18 @@ def f64_material_parse(f3d_mat: "F3DMaterialProperty", always_set: bool, set_lig
     if rdp.g_cull_front:
         f64mat.cull = "BOTH" if f64mat.cull == "BACK" else "FRONT"
 
-    use_tex0, use_tex1 = f3d_mat.tex0.tex_set and cc_uses["Texture 0"], f3d_mat.tex1.tex_set and cc_uses["Texture 1"]
-    if use_tex0:
-        state.tex_confs[0] = get_tile_conf(f3d_mat.tex0)
-    if use_tex1:
-        state.tex_confs[1] = get_tile_conf(f3d_mat.tex1)
-    # TODO: use check for multitex function in glTF pr?
+    for i, tex in f3d_mat.used_textures.items():
+        state.tex_confs[i] = get_tile_conf(tex)
 
-    uv_basis = None
-    if use_tex0 and use_tex1:
-        uv_basis = int(f3d_mat.uv_basis.removeprefix("TEXEL"))
-    elif use_tex0 or use_tex1:
-        uv_basis = 0 if use_tex0 else 1
+    uv_basis = f3d_mat.uv_basis_index
     if uv_basis is not None:
-        state.tex_size = tuple(getattr(f3d_mat, f"tex{uv_basis}").get_tex_size())
+        state.tex_size = getattr(f3d_mat, f"tex{uv_basis}").size
 
-    if cc_uses["Texture 0"] and cc_uses["Texture 1"]:
+    if f3d_mat.textlod == "G_TL_LOD":
         state.mip_count = f3d_mat.rdp_settings.num_textures_mipmapped - 1
     state.prim_depth = (rdp.prim_depth.z, rdp.prim_depth.dz)
 
     from fast64_internal.f3d.f3d_gbi import get_F3D_GBI
-    from fast64_internal.f3d.f3d_material import get_textlut_mode
 
     gbi = get_F3D_GBI()
     geo_mode = othermode_l = othermode_h = 0
@@ -457,12 +448,16 @@ def f64_material_parse(f3d_mat: "F3DMaterialProperty", always_set: bool, set_lig
             continue
         geo_mode |= int(getattr(rdp, attr)) << i
     for i, attr in enumerate(OTHERMODE_L_ATTRS):
-        othermode_l |= getattr(gbi, getattr(rdp, attr))
+        othermode_l |= getattr(gbi, f3d_mat.get_rdp_othermode(attr))
+    auto_modes = f3d_mat.get_auto_othermode_h()
     for i, attr in enumerate(OTHERMODE_H_ATTRS):
-        othermode_h |= getattr(gbi, getattr(rdp, attr))
+        auto_mode = auto_modes.get(attr)
+        if auto_mode is not None:
+            othermode_h |= getattr(gbi, auto_mode)
+            continue
+        othermode_h |= getattr(gbi, f3d_mat.get_rdp_othermode(attr))
     if rdp.g_mdsft_cycletype == "G_CYC_COPY":
         othermode_h &= ~(gbi.G_TF_BILERP | gbi.G_TF_AVERAGE)
-    othermode_h |= getattr(gbi, get_textlut_mode(f3d_mat))
     state.geo_mode, state.othermode_l, state.othermode_h = geo_mode, othermode_l, othermode_h
     state.save_cache()
 
